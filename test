@@ -1,0 +1,57 @@
+# irrigation_digital.py
+# pip install RPi.GPIO
+import RPi.GPIO as GPIO
+import time
+
+SENSOR_GPIO = 17   # BCM - D output from sensor
+RELAY_GPIO  = 27   # BCM - control relay for pump
+DEBOUNCE_MS = 200  # anti-rebond en ms
+MAX_PUMP_TIME = 45 # s sécurité
+MIN_INTERVAL = 10*60 # 10 minutes entre cycles
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(SENSOR_GPIO, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)  # ou PUD_UP selon montage
+GPIO.setup(RELAY_GPIO, GPIO.OUT, initial=GPIO.LOW)  # adapter selon logique du relais
+
+last_cycle = 0
+
+def start_pump():
+    GPIO.output(RELAY_GPIO, GPIO.HIGH)  # voir logique relais
+    start = time.time()
+    print("Pompe démarrée")
+    # safety loop
+    while True:
+        # si capteur indique humidité (HIGH) on stoppe
+        if GPIO.input(SENSOR_GPIO):
+            print("Capteur : humidité détectée -> arrêt pompe")
+            break
+        if time.time() - start > MAX_PUMP_TIME:
+            print("Sécurité : durée max atteinte -> arrêt pompe")
+            break
+        time.sleep(0.5)
+    GPIO.output(RELAY_GPIO, GPIO.LOW)
+    print("Pompe arrêtée")
+
+try:
+    print("Démarrage boucle")
+    while True:
+        if time.time() - last_cycle < MIN_INTERVAL:
+            time.sleep(1)
+            continue
+        # On lit l'entrée (0 = sec, 1 = humide) — vérifier sur ton capteur la logique
+        sensor_state = GPIO.input(SENSOR_GPIO)
+        # Si capteur retourne 0 = sec (à vérifier), on lance
+        if sensor_state == 0:
+            print("Sol sec détecté -> démarrage pompe")
+            start_pump()
+            last_cycle = time.time()
+        else:
+            # sol ok
+            pass
+        time.sleep(1)
+
+except KeyboardInterrupt:
+    print("Arrêt par user")
+finally:
+    GPIO.output(RELAY_GPIO, GPIO.LOW)
+    GPIO.cleanup()
